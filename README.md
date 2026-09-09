@@ -36,7 +36,7 @@ FYI: this template is built for CUDA 13.0 and above.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `download_minimax_h3` | false | Downloads the models and installs the six workflows. Set it to true. |
+| `download_minimax_h3` | false | Downloads the models and installs all eleven workflows. Set it to true. |
 | `minimax_quant` | int8 | Which build to download: int8, fp8, nvfp4, or false for full bf16. You can leave this alone. |
 | `LLM_KEY` | empty | Your OpenRouter key. Only the three Auto Prompt workflows use it. |
 | `civitai_token` | empty | Your CivitAI API token |
@@ -56,8 +56,8 @@ dropdown.
 The template also installs the
 [MiniMax H3 Latent Upscaler nodes](https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler).
 When `download_minimax_h3` is true, its 3D fp16 weight is downloaded to
-`models/latent_upscale_models`. Add “Minimax H3 Latent Upscaler (3D)” to a graph to use it; none of
-the six bundled workflows enables it automatically.
+`models/latent_upscale_models`. Five ready-to-run latent-upscaling workflows are installed under
+`MiniMax H3/Upscaling`; the six standard workflows remain unchanged.
 
 ## Once it is up
 

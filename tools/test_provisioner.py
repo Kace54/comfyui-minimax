@@ -13,10 +13,10 @@ offers to download it to their own PC. It also checks the source workflow
 links and the tuned loader/scheduler defaults before the provisioner rewrites
 copies for another quant profile.
 
-This is also the ONLY gate on template.json's `extra_models` key (the turbo
-LoRAs and latent upscaler no workflow references): the runtime validator
-ignores the key and the provisioner only prints an error line at boot, so a
-typo there is invisible everywhere else.
+This is also the ONLY gate on template.json's `extra_models` key (the bundled
+Turbo LoRAs and latent upscaler): the runtime validator ignores the key and
+the provisioner only prints an error line at boot, so a typo there is
+invisible everywhere else.
 
 Run: python3 tools/test_provisioner.py
 Stdlib only, no pytest. Needs template.json + pins.json in the repo root.
@@ -84,6 +84,14 @@ SOURCE_WORKFLOW_DEFAULTS = {
     "MiniMax - T2V - Custom Prompt.json":
         (FL2VA_INT8, FL2VA_TURBO_8STEP, 0.8, False),
 }
+UPSCALING_WORKFLOWS = {
+    "MiniMax - I2V - Auto Prompt - Upscaling.json",
+    "MiniMax - I2V - Custom Prompt - Upscaling.json",
+    "MiniMax - R2V - Auto Prompt - Upscaling.json",
+    "MiniMax - T2V - Auto Prompt - Upscaling.json",
+    "MiniMax - T2V - Custom Prompt - Upscaling.json",
+}
+CHARACTER_LORA_PLACEHOLDER = "Your_Character_LoRA_Here.safetensors"
 
 # label, minimax_quant, expected profile, expected warning fragment. The false
 # profile selects full bf16; invalid values keep booting on int8 with a warning.
@@ -224,14 +232,83 @@ def assert_graph_integrity(graph: dict, label: str, root: bool = False) -> None:
 
 def assert_source_workflows(registry: dict) -> None:
     workflow_root = REPO / "workflows" / "MiniMax H3"
-    for workflow_file in workflow_root.glob("*.json"):
+    workflow_files = sorted(workflow_root.rglob("*.json"))
+    expected_workflows = set(SOURCE_WORKFLOW_DEFAULTS) | {
+        f"Upscaling/{name}" for name in UPSCALING_WORKFLOWS
+    } | {"video_minimax_h3_r2v.json"}
+    found_workflows = {
+        workflow_file.relative_to(workflow_root).as_posix()
+        for workflow_file in workflow_files
+    }
+    assert found_workflows == expected_workflows, (
+        "unexpected MiniMax workflow set: "
+        f"missing={sorted(expected_workflows - found_workflows)}, "
+        f"extra={sorted(found_workflows - expected_workflows)}"
+    )
+
+    for workflow_file in workflow_files:
         doc = load_json(workflow_file, "workflow")
-        assert_graph_integrity(doc, workflow_file.name, root=True)
+        label = workflow_file.relative_to(workflow_root).as_posix()
+        assert_graph_integrity(doc, label, root=True)
         for subgraph in doc.get("definitions", {}).get("subgraphs", []):
             assert_graph_integrity(
                 subgraph,
-                f"{workflow_file.name}/{subgraph.get('name', subgraph['id'])}",
+                f"{label}/{subgraph.get('name', subgraph['id'])}",
             )
+
+    for name in sorted(UPSCALING_WORKFLOWS):
+        doc = load_json(workflow_root / "Upscaling" / name,
+                        "upscaling workflow")
+        groups = [doc.get("nodes", [])] + [
+            subgraph.get("nodes", [])
+            for subgraph in doc.get("definitions", {}).get("subgraphs", [])
+        ]
+        nodes = [node for group in groups for node in group]
+        upscalers = [
+            node for node in nodes
+            if node.get("type") == "MinimaxH3LatentUpscaler3D"
+        ]
+        assert len(upscalers) == 1, (
+            f"{name}: expected one MinimaxH3LatentUpscaler3D node"
+        )
+        upscaler = upscalers[0]
+        assert upscaler.get("widgets_values") == [
+            LATENT_UPSCALER, "scale by multiplier", 2, 32, False, False,
+            "cuda", "fp16",
+        ], f"{name}: latent upscaler settings drifted"
+        assert upscaler.get("widgets_values_named") == {
+            "model_name": LATENT_UPSCALER,
+            "mode": "scale by multiplier",
+            "mode.scale": 2,
+            "align": 32,
+            "enable_temporal_chunking": False,
+            "force_unload": False,
+            "device": "cuda",
+            "precision": "fp16",
+        }, f"{name}: named latent upscaler settings drifted"
+
+        power_lora_nodes = [
+            node for node in nodes
+            if node.get("type") == "Power Lora Loader (rgthree)"
+        ]
+        assert len(power_lora_nodes) == 1, (
+            f"{name}: expected one character LoRA placeholder"
+        )
+        power_lora = power_lora_nodes[0]
+        lora_widget = power_lora["widgets_values"][2]
+        named_lora_widget = power_lora["widgets_values_named"]["lora_1"]
+        expected_lora_widget = {
+            "on": False,
+            "lora": CHARACTER_LORA_PLACEHOLDER,
+            "strength": 1,
+            "strengthTwo": None,
+        }
+        assert lora_widget == expected_lora_widget, (
+            f"{name}: character LoRA widget is not the safe placeholder"
+        )
+        assert named_lora_widget == expected_lora_widget, (
+            f"{name}: named character LoRA widget is not the safe placeholder"
+        )
 
     for name, defaults in SOURCE_WORKFLOW_DEFAULTS.items():
         diffusion, lora, strength, has_input_image = defaults
@@ -282,8 +359,9 @@ def assert_source_workflows(registry: dict) -> None:
                 "your_input_image.png", "image"
             ], f"{name}: stale local image default remains"
 
-    print("✅ all six workflow graphs have internally consistent links")
+    print("✅ all eleven workflow graphs have internally consistent links")
     print("✅ five refreshed workflows use the int8 defaults and 8-step Turbo")
+    print("✅ five upscaling workflows use the pinned 2x latent upscaler")
 
 
 def main() -> int:
@@ -362,8 +440,8 @@ def main() -> int:
         "min_size_mb": 650,
     }, f"unexpected latent upscaler registry entry: {registry[LATENT_UPSCALER]}"
     assert sorted(flag.get("extra_models", [])) == sorted(EXTRA_MODELS), (
-        f"extra_models must list exactly the {len(EXTRA_MODELS)} models no "
-        f"workflow references, got {flag.get('extra_models')}"
+        f"extra_models must list exactly the {len(EXTRA_MODELS)} bundled "
+        f"models, got {flag.get('extra_models')}"
     )
     print(f"✅ {len(TURBO_LORAS)} turbo LoRAs registered, "
           f"{len(BUNDLED_LORAS)} bundled via extra_models")
@@ -405,6 +483,15 @@ def main() -> int:
                 f"{proc.stdout}\n{proc.stderr}"
             )
             lines = [l for l in manifest.read_text().splitlines() if l]
+            deployed_upscalers = {
+                path.name
+                for path in (dst / "MiniMax H3" / "Upscaling").glob("*.json")
+            }
+            assert deployed_upscalers == UPSCALING_WORKFLOWS, (
+                f"{label}: deployed upscaling workflows are "
+                f"{sorted(deployed_upscalers)}, expected "
+                f"{sorted(UPSCALING_WORKFLOWS)}"
+            )
             downloaded = {l.split("\t")[1].rsplit("/", 1)[1] for l in lines}
             destinations = {
                 Path(line.split("\t")[1]).name:
