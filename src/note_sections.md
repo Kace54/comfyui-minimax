@@ -5,7 +5,7 @@ soundtrack in one pass. Dialogue, footsteps, music and room tone come
 out of the same generation, with nothing to sync afterwards. Clips are
 768p, 4 to 15 seconds, at 24 fps.
 
-It comes with six workflows:
+It comes with eleven workflows. These are the six standard workflows:
 
 - MiniMax - T2V - Custom Prompt: text to video and audio.
 - MiniMax - T2V - Auto Prompt: same, but writes the full H3 prompt for
@@ -16,6 +16,9 @@ It comes with six workflows:
   manager and the prompt written for you. See below.
 - video_minimax_h3_r2v: the stock reference graph, up to 9 images, 3
   video clips and 3 audio clips.
+
+The MiniMax H3/Upscaling folder adds five 2x latent-upscaling variants
+of the curated T2V, I2V and R2V workflows.
 
 The three Auto Prompt workflows need an OpenRouter key. Set the LLM_KEY
 variable to your key, or paste it into the OpenRouter API Key node in
@@ -135,7 +138,8 @@ switching.
 The MiniMax H3 Latent Upscaler node pack is installed on this template.
 With download_minimax_h3 set to true, its 3D fp16 weight is downloaded
 to models/latent_upscale_models. Add “Minimax H3 Latent Upscaler (3D)”
-to your graph to use it. The six bundled workflows do not add it for you.
+to your graph to use it. Five ready-to-run upscaling workflows are in the
+MiniMax H3/Upscaling folder; the six standard workflows remain unchanged.
 
 This upscales MiniMax's latent before decoding. It can shorten the
 high-resolution part of a workflow, but it does not reduce peak VRAM.
