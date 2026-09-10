@@ -1,5 +1,5 @@
 {
-  "template_repo": "https://github.com/Hearmeman24/comfyui-minimax.git",
+  "template_repo": "https://github.com/Kace54/comfyui-minimax.git",
   "branch": "master",
   "provisioning_mode": "walk",
   "flags": {
@@ -54,5 +54,5 @@
     ]
   },
   "sage": true,
-  "comfy_extra_args": "--disable-dynamic-vram"
+  "comfy_extra_args": ""
 }
