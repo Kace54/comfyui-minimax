@@ -1,8 +1,23 @@
+#!/usr/bin/env bash
 # shellcheck shell=bash
 # pre_launch hook for comfyui-minimax
-# Installs container cgroup memory detection for psutil so ComfyUI knows
-# the container's real RAM limit (50GB) instead of the host machine's (257GB).
 
+# RefMod Studio folder loaders resolve these names under ComfyUI's input/.
+# Also ensure models/refmods and models/text_cond directories exist for saving and loading.
+if test -d /workspace; then
+    mkdir -p /workspace/ComfyUI/input/refmod_images \
+             /workspace/ComfyUI/input/refmod_video \
+             /workspace/ComfyUI/models/refmods \
+             /workspace/ComfyUI/models/text_cond
+else
+    mkdir -p /ComfyUI/input/refmod_images \
+             /ComfyUI/input/refmod_video \
+             /ComfyUI/models/refmods \
+             /ComfyUI/models/text_cond
+fi
+
+# Installs container cgroup memory detection for psutil so ComfyUI knows
+# the container's real RAM limit (e.g. 50GB) instead of the host machine's (e.g. 257GB).
 cat << 'EOF' > /usr/lib/python3.12/sitecustomize.py
 import os
 import psutil
